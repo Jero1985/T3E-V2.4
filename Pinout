@@ -1,0 +1,37 @@
+gpio18 = ZT3L
+gpio19 = ZT3L
+gpio40 = DE
+gpio39 =  vsync_pin
+gpio38 =  hsync_pin
+gpio41 = pclk_pin
+gpio2 = Relais
+gpio45 = Relais
+gpio46 = Relais
+gpio42 = Hintergrundbeleuchtung 
+GPIO7 = ic und Display-pin 36
+GPIO6 = ic und Display-pin 37
+GPIO5 = endet anscheinet einfach an einen freien lötkontakt
+
+blue
+gnd=16 B0
+gpio15=17 B1 + clk_pin
+gpio48=18 B2 + mosi_pin
+gpio47=19 B3
+gpio21=20 B4
+gpio14=21 B5
+
+green
+gpio13=22 G0
+gpio12=23 G1
+gpio11=24 G2
+gpio10=25 G3
+gpio09=26 G4
+gpio03=27 G5
+
+red
+gnd=28 R0
+gpio08=29 R1
+gpio18=30 R2
+gpio17=31 R3
+gpio16=32 R4
+gpio00=33 R5
