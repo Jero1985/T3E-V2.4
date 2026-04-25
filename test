@@ -1,1 +1,1415 @@
+esphome:
+  name: display-flur
+  on_boot:
+    priority: 600
+    then:
+      - delay: 1s
+      - light.turn_on: display_backlight
 
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  cpu_frequency: 240MHz
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG: "y" 
+      CONFIG_SPIRAM_RODATA: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: INFO
+  hardware_uart: UART0 
+
+wifi:
+  ssid: "xxx"
+  password: "xxx"
+  use_address: 192.168.2.194
+  manual_ip:
+    static_ip: 192.168.2.194
+    gateway: 192.168.2.1
+    subnet: 255.255.255.0
+
+api:
+  reboot_timeout: 0s
+  encryption: {key: "xxx"}
+
+ota:
+  - platform: esphome
+
+# --- HOME ASSISTANT ENTITÄTEN ---
+sensor:
+  - platform: homeassistant
+    id: rollo_schlaf_pos
+    entity_id: cover.rollo_schlafzimmer
+    attribute: current_position
+    
+  - platform: homeassistant
+    id: rollo_kuche_pos
+    entity_id: cover.rollo_kuche
+    attribute: current_position
+
+  # Wallbox
+  - platform: homeassistant
+    id: wallbox_power
+    entity_id: sensor.cupra_born_charging_power
+    on_value:
+      then:
+        - lambda: |-
+            // Wir berechnen den Prozentwert (0-100)
+            int prozent = (int)((x / 11000.0) * 100.0);
+            if (prozent > 100) prozent = 100;
+            if (prozent < 0) prozent = 0;
+            
+            // Wir setzen den Wert direkt über die C++ Funktion
+            id(lv_arc_61).set_value(prozent);
+
+  # PV-Leistung Textanzeige
+  - platform: homeassistant
+    id: pv_power_aktuell
+    entity_id: sensor.pv_leistung_positiv
+    on_value:
+      then: # Hier den Bindestrich davor entfernen, falls 'then' direkt unter on_value steht
+        - lambda: |-
+            // Geänderte ID von pv_label_id auf wsb_label
+            id(wsb_label).set_text(str_sprintf("%.1f kW", x).c_str());
+
+  # Luftfeuchtigkeit
+  - platform: homeassistant
+    id: ha_humidity
+    entity_id: sensor.gross_rosenburg_luftfeuchtigkeit
+    on_value:
+      then:
+        - lambda: |-
+            // Schreibt den Wert in dein Label 'c2_ic_value'
+            id(c2_ic_value).set_text(str_sprintf("%.0f %%", x).c_str());
+
+
+
+
+
+
+binary_sensor:
+  - platform: homeassistant
+    id: auto_rollo
+    entity_id: input_boolean.sonnenschutz_automatik
+  - platform: homeassistant
+    id: auto_weihnacht
+    entity_id: input_boolean.weihnachtsbeleuchtung_automatik
+  - platform: homeassistant
+    id: status_weihnacht
+    entity_id: switch.4_fach_relais_hauptverteilung_l1
+  - platform: homeassistant
+    id: status_trockner
+    entity_id: switch.4_fach_relais_hauptverteilung_l4
+  - platform: homeassistant
+    id: auto_trockner
+    entity_id: input_boolean.lufttrockner_automatik
+
+# --- HARDWARE ---
+i2c:
+  - id: bus_a
+    sda: GPIO07
+    scl: GPIO06
+    scan: true
+
+touchscreen:
+  - platform: gt911
+    id: my_touch
+    display: tft_display
+    i2c_id: bus_a
+    address: 0x5D
+    reset_pin: GPIO5
+
+spi:
+  id: lcd_spi
+  clk_pin: {number: GPIO15, allow_other_uses: true}
+  mosi_pin: {number: GPIO48, allow_other_uses: true}
+
+output:
+  - platform: ledc
+    id: backlight_output
+    pin: GPIO42
+    frequency: 1000Hz
+
+light:
+  - platform: monochromatic
+    id: display_backlight
+    output: backlight_output
+    restore_mode: ALWAYS_ON
+
+display:
+  - platform: st7701s
+    id: tft_display
+    dimensions: {width: 480, height: 480}
+    color_order: RGB
+    invert_colors: true
+    auto_clear_enabled: false
+    spi_mode: MODE3
+    data_rate: 2MHz
+    cs_pin: {number: GPIO4, allow_other_uses: true}
+    reset_pin: {number: GPIO4, allow_other_uses: true}
+    init_sequence:
+      - 1
+    data_pins:
+      red: [GPIO8, GPIO18, GPIO17, GPIO16, GPIO0]
+      green: [GPIO13, GPIO12, GPIO11, GPIO10, GPIO9, GPIO3]
+      blue: [{number: GPIO15, allow_other_uses: true}, {number: GPIO48, allow_other_uses: true}, GPIO47, GPIO21, GPIO14]
+    de_pin: GPIO40
+    vsync_pin: GPIO39
+    hsync_pin: GPIO38
+    pclk_pin: GPIO41
+
+# --- SCHRIFTEN ---
+font:
+  - file: "gfonts://Montserrat"
+    id: montserrat_8
+    size: 8
+    glyphs: "0123456789., %-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜäöüß"
+
+  - file: "gfonts://Montserrat"
+    id: montserrat_18
+    size: 18
+    glyphs: "0123456789., %-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜäöüß"
+
+  - file: "gfonts://Montserrat"
+    id: montserrat_20
+    size: 20
+    glyphs: "0123456789., %-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜäöüß"
+
+  - file: "gfonts://Montserrat"
+    id: montserrat_22
+    size: 22
+    glyphs: "0123456789., %-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜäöüß"
+
+  - file: "gfonts://Montserrat"
+    id: montserrat_24
+    size: 24
+    glyphs: "0123456789., %-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜäöüß"
+
+  - file: "gfonts://Montserrat"
+    id: montserrat_25
+    size: 25
+    glyphs: "0123456789., %-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜäöüß"
+
+  - file: "gfonts://Montserrat"
+    id: montserrat_58
+    size: 58
+    glyphs: "0123456789., Wk"
+
+  - file: "gfonts://Roboto"
+    id: font_primary
+    size: 18
+    glyphs: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!,:;%() /ÄÖÜäöüß"
+
+  - file: "gfonts://Roboto"
+    id: font_secondary
+    size: 14
+    glyphs: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!,:;%() /ÄÖÜäöüß"
+
+  - file: "materialdesignicons-webfont.ttf"
+    id: mdi_font
+    size: 48
+    glyphs: ["\U000F111E", "\U000F111C", "\U000F054B", "\U000F12BA", "\U000F0024", "\U000F0054", "\U000F0512", "\U000F05F1", "\U000F0015", "\U000F0043", "\U000F0A1E"]
+
+# --- LVGL ---
+
+lvgl:
+  id: my_lvgl
+  buffer_size: 15%
+  touchscreens:
+    - touchscreen_id: my_touch
+  pages:
+    - id: canvas_1
+      bg_color: 0x3D64B8
+      bg_opa: 100%
+      pad_all: 0
+      widgets:
+        - tabview:
+            id: Main
+            x: 0
+            y: 0
+            width: 480
+            height: 480
+            bg_color: 0x032163
+            bg_grad_color: 0x53028D
+            bg_grad_dir: VER
+            bg_main_stop: 114
+            border_color: 0x032163
+            border_opa: 100%
+            radius: 0
+            scrollbar_mode: "OFF"
+            tab_style:
+              bg_color: 0x032163
+              text_color: 0x868383
+              bg_opa: 100%
+              items:
+                checked:
+                  bg_color: 0x032163
+                  text_color: 0xFFFFFF
+                  border_color: 0xFFFFFF
+                pressed:
+                  bg_color: 0x032163
+                  text_color: 0xFFFFFF
+            tabs:
+              - name: "Home"
+                widgets: 
+                  - obj: 
+                      id: widget_1777138364983_w3pe01kb3
+                      x: 15
+                      y: 9
+                      width: 208
+                      height: 150
+                      bg_color: 0x032163
+                      border_width: 1
+                      border_color: 0x4B5563
+                      radius: 8
+                      shadow_width: 10
+                      shadow_color: 0xFFF700
+                      pad_all: 0
+                      widgets:
+                        - label:
+                            id: clk_time
+                            x: 29
+                            y: 25
+                            width: 148
+                            height: 64
+                            text: "14:32"
+                            text_color: 0xF1F5F9
+                            text_align: CENTER
+                            long_mode: CLIP
+                            text_font: montserrat_58
+                        - label:
+                            id: clk_date
+                            x: 9
+                            y: 100
+                            width: 188
+                            height: 40
+                            text: "Mon 28 Mar"
+                            text_color: 0x8E9FB8
+                            text_align: CENTER
+                            long_mode: CLIP
+                            text_font: montserrat_25
+                  - obj:
+                      id: widget_1777138409066_hquj3pny2
+                      x: 232
+                      y: 9
+                      width: 207
+                      height: 70
+                      bg_color: 0x032163
+                      border_width: 1
+                      border_color: 0x4B5563
+                      radius: 8
+                      shadow_width: 10
+                      shadow_color: 0x00BFFF
+                      pad_all: 0
+                      widgets:
+                        - label:
+                            id: c2_ic_icon
+                            x: 10
+                            y: 10
+                            width: 48
+                            height: 48
+                            text: "\uF043"
+                            text_font: montserrat_18
+                            text_align: CENTER
+                            text_color: 0x06B6D4
+                        - label:
+                            id: widget_1777145757100_jdsdi3b18
+                            x: 100
+                            y: 51
+                            width: 101
+                            height: 12
+                            text: "Luftfeuchtigkeit"
+                            text_color: 0x8E9FB8
+                            text_align: RIGHT
+                            long_mode: CLIP
+                            text_font: montserrat_8
+                        - label:
+                            id: c2_ic_value
+                            x: 70
+                            y: 21
+                            width: 48
+                            height: 26
+                            text: "58"
+                            text_color: 0xF1F5F9
+                            text_align: LEFT
+                            long_mode: CLIP
+                            text_font: montserrat_22
+                  - obj:
+                      id: widget_1777138404138_fyy0gneyg
+                      x: 15
+                      y: 170
+                      width: 424
+                      height: 225
+                      bg_color: 0x032163
+                      border_width: 1
+                      border_color: 0x4B5563
+                      radius: 8
+                      shadow_width: 10
+                      shadow_color: 0x62FF00
+                      opa: 80%
+                      pad_all: 0
+                      widgets:
+                        - obj:
+                            id: pv_line
+                            x: 72
+                            y: 140
+                            width: 110
+                            height: 8
+                            bg_color: 0x4F46E5
+                            border_width: 0
+                            border_color: 0x4B5563
+                            radius: 4
+                            pad_all: 0
+                            widgets:
+                              - obj:
+                                  id: pv_dot
+                                  x: 0
+                                  y: 0
+                                  width: 8
+                                  height: 8
+                                  bg_color: 0x62FF00
+                                  border_width: 0
+                                  border_color: 0x4B5563
+                                  radius: 4
+                                  pad_all: 0
+                        - obj:
+                            id: widget_1777140880066_e8p8wc455
+                            x: 240
+                            y: 140
+                            width: 110
+                            height: 8
+                            bg_color: 0x4F46E5
+                            border_width: 0
+                            border_color: 0x4B5563
+                            radius: 4
+                            pad_all: 0
+                            widgets:
+                              - obj:
+                                  id: widget_1777140880066_a4wm6zco7
+                                  x: 0
+                                  y: 0
+                                  width: 8
+                                  height: 8
+                                  bg_color: 0xFFF700
+                                  border_width: 0
+                                  border_color: 0x4B5563
+                                  radius: 4
+                                  pad_all: 0 #Teil 1 für die KI
+                        - obj:
+                            id: widget_1777141006687_ywotp20kt
+                            x: 207
+                            y: 69
+                            width: 8
+                            height: 50
+                            bg_color: 0x4F46E5
+                            border_width: 0
+                            border_color: 0x4B5563
+                            radius: 4
+                            pad_all: 0
+                            widgets:
+                              - obj:
+                                  id: widget_1777141006687_ljozy3how
+                                  x: 0
+                                  y: 0
+                                  width: 8
+                                  height: 8
+                                  bg_color: 0xFFF700
+                                  border_width: 0
+                                  border_color: 0xFFF700
+                                  radius: 4
+                                  pad_all: 0
+                        - obj:
+                            id: wallbox_knoten
+                            x: 346
+                            y: 109
+                            width: 70
+                            height: 70
+                            bg_color: 0x4F46E5
+                            radius: 35
+                            pad_all: 0
+                            widgets:
+                              - label:
+                                 id: wallbox_icon
+                                 x: 11
+                                 y: 11
+                                 width: 48
+                                 height: 48
+                                 text: "\U0000F05F1"
+                                 text_font: mdi_font
+                                 text_align: CENTER
+                                 text_color: 0xFFFFFF
+                              - arc: 
+                                  id: lv_arc_61
+                                  x: 0
+                                  y: 0
+                                  width: 70
+                                  height: 70
+                                  align: CENTER
+                                  start_angle: 0
+                                  end_angle: 360
+                                  arc_width: 5
+                                  bg_opa: 0%
+                                  indicator:
+                                    arc_color: 0xFBBF24
+                                    arc_width: 5
+                                  knob:
+                                    bg_opa: 0%
+                        - obj:
+                            id: haus_knoten
+                            x: 176
+                            y: 109
+                            width: 70
+                            height: 70
+                            bg_color: 0x4F46E5
+                            radius: 35
+                            pad_all: 0
+                            widgets:
+                              - label:
+                                  id: widget_1777142404678_p9pol32a9
+                                  x: 11
+                                  y: 11
+                                  width: 48
+                                  height: 48
+                                  text: "\uF015"
+                                  text_font: montserrat_24
+                                  text_align: CENTER
+                                  text_color: 0xFFFFFF
+                              - arc:
+                                  id: widget_1777144401614_uj97pyexc
+                                  x: 0
+                                  y: 0
+                                  width: 72
+                                  height: 72
+                                  start_angle: 0
+                                  end_angle: 360
+                                  rotation: 90
+                                  arc_color: 0xFF0000
+                                  arc_width: 5
+                                  arc_opa: 100%
+                                  arc_rounded: true
+                                  indicator:
+                                    arc_color: 0xFFEE00
+                                    arc_width: 5
+                                    arc_opa: 100%
+                                    arc_rounded: true
+                                  knob:
+                                    bg_opa: 0%
+                                  bg_opa: 0%
+                        - obj:
+                            id: netz_knoten
+                            x: 6
+                            y: 109
+                            width: 70
+                            height: 70
+                            bg_color: 0x4F46E5
+                            radius: 35
+                            pad_all: 0
+                            widgets:
+                              - label:
+                                  id: widget_1777142014452_xwusmsd7h
+                                  x: 11
+                                  y: 11
+                                  width: 48
+                                  height: 48
+                                  text: "\U000F0CB8"
+                                  text_font: mdi_font
+                                  text_align: CENTER
+                                  text_color: 0xFFFFFF
+                              - arc:
+                                  id: widget_1777142014453_75eqnnroj
+                                  x: -1
+                                  y: -1
+                                  width: 72
+                                  height: 72
+                                  start_angle: 0
+                                  end_angle: 360
+                                  rotation: 90
+                                  mode: SYMMETRICAL
+                                  arc_color: 0xFF0000
+                                  arc_width: 5
+                                  arc_opa: 100%
+                                  arc_rounded: true
+                                  indicator:
+                                    arc_color: 0x04FF00
+                                    arc_width: 5
+                                    arc_opa: 100%
+                                    arc_rounded: true
+                                  knob:
+                                    bg_opa: 0%
+                                  bg_opa: 0%
+                        - obj:
+                            id: pv_knoten
+                            x: 176
+                            y: 5
+                            width: 70
+                            height: 70
+                            bg_color: 0x4F46E5
+                            radius: 35
+                            pad_all: 0
+                            widgets:
+                              - label:
+                                  id: widget_1777141386693_k4cuftqem
+                                  x: 11
+                                  y: 11
+                                  width: 48
+                                  height: 48
+                                  text: "\U000F0A72"
+                                  text_font: mdi_font
+                                  text_align: CENTER
+                                  text_color: 0xFFFFFF
+                              - arc:
+                                  id: widget_1777142404678_zimzjewmf
+                                  x: 0
+                                  y: 0
+                                  width: 72
+                                  height: 72
+                                  start_angle: 0
+                                  end_angle: 360
+                                  rotation: 90
+                                  arc_color: 0x404040
+                                  arc_width: 5
+                                  arc_opa: 100%
+                                  arc_rounded: true
+                                  indicator:
+                                    arc_color: 0xFFEE00
+                                    arc_width: 5
+                                    arc_opa: 100%
+                                    arc_rounded: true
+                                  knob:
+                                    bg_opa: 0%
+                                  bg_opa: 0%
+                        - label:
+                            id: bezug_aktuell
+                            x: 6
+                            y: 189
+                            width: 82
+                            height: 25
+                            text: "800 W"
+                            text_color: 0xFFFFFF
+                            text_align: CENTER
+                            text_font: montserrat_22
+                        - label:
+                            id: wallbox_aktuell
+                            x: 334
+                            y: 189
+                            width: 82
+                            height: 25
+                            text: "11 kW"
+                            text_color: 0xFFFFFF
+                            text_align: CENTER
+                            text_font: montserrat_22
+                        - label:
+                            id: pv_aktuell
+                            x: 246
+                            y: 25
+                            width: 100
+                            height: 25
+                            text: "8,6 kW"
+                            text_color: 0xFFFFFF
+                            text_align: CENTER
+                            text_font: montserrat_22
+                        - label:
+                            id: haus
+                            x: 175
+                            y: 179
+                            width: 72
+                            height: 25
+                            text: "HAUS"
+                            text_color: 0xFFFFFF
+                            text_align: CENTER
+                            text_font: montserrat_22
+                        - label:
+                            id: pv
+                            x: 262
+                            y: 0
+                            width: 72
+                            height: 25
+                            text: "PV"
+                            text_color: 0xFFFFFF
+                            text_align: CENTER
+                            text_font: montserrat_22
+                        - label:
+                            id: netz
+                            x: 5
+                            y: 81
+                            width: 72
+                            height: 25
+                            text: "Netz"
+                            text_color: 0xFFFFFF
+                            text_align: CENTER
+                            text_font: montserrat_22
+                  - obj:
+                      id: widget_1777145757100_uxhy1a4jg
+                      x: 232
+                      y: 90
+                      width: 207
+                      height: 70
+                      bg_color: 0x032163
+                      border_width: 1
+                      border_color: 0x4B5563
+                      radius: 8
+                      shadow_width: 10
+                      shadow_color: 0xFF6A00
+                      pad_all: 0
+                      widgets:
+                        - label:
+                            id: widget_1777145757100_rni44u94e
+                            x: 10
+                            y: 10
+                            width: 48
+                            height: 48
+                            text: "\U000F050F"
+                            text_font: mdi_font
+                            text_align: CENTER
+                            text_color: 0xF59E0B
+                        - label:
+                            id: widget_1777145757100_jlglrkxdn
+                            x: 70
+                            y: 21
+                            width: 55
+                            height: 26
+                            text: "23.5"
+                            text_color: 0xF1F5F9
+                            text_align: LEFT
+                            long_mode: CLIP
+                            text_font: montserrat_22
+                        - label:
+                            id: c1_ic_label
+                            x: 100
+                            y: 51
+                            width: 101
+                            height: 12
+                            text: "Außentemperatur"
+                            text_color: 0x8E9FB8
+                            text_align: RIGHT
+                            long_mode: CLIP
+                            text_font: montserrat_8
+              - name: Rollo
+                widgets:
+                  - tabview:
+                      id: Rollo
+                      x: 0
+                      y: 0
+                      width: 454
+                      height: 406
+                      position: LEFT
+                      size: 14%
+                      bg_color: 0x011542
+                      border_width: 4
+                      border_color: 0x011542
+                      border_opa: 100%
+                      radius: 10
+                      shadow_width: 0
+                      shadow_color: 
+                      shadow_opa: 100%
+                      scrollbar_mode: "OFF"
+                      tab_style:
+                        bg_color: 0x011542
+                        text_color: 0x868383
+                        bg_opa: 100%
+                        items:
+                          checked:
+                            bg_color: 0x011542
+                            text_color: 0xFFFFFF
+                            border_color: 0xFFFFFF
+                          pressed:
+                            bg_color: 0x011542
+                            text_color: 0xFFFFFF
+                      tabs:
+                        - name: Übersicht
+                        - name: Schlafen
+                          widgets:
+                            - obj:
+                                id: widget_1777134785519_iakzdwtsf
+                                x: 28
+                                y: 47
+                                width: 308
+                                height: 286
+                                bg_color: 0x03003D
+                                border_width: 1
+                                border_color: 0x4B5563
+                                radius: 8
+                                shadow_width: 10
+                                scrollbar_mode: "OFF"
+                                pad_all: 0
+                                widgets:
+                                  - label:
+                                      id: widget_1777134785519_njnmjstll
+                                      x: 9
+                                      y: 235
+                                      width: 293
+                                      height: 40
+                                      text: "Bedingung"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      text_font: montserrat_24
+                                  - label:
+                                      id: widget_1777134785519_lf5sd8dy7
+                                      x: 60
+                                      y: 80
+                                      width: 125
+                                      height: 30
+                                      text: "Automatik"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - label:
+                                      id: widget_1777134785519_h80duvtow
+                                      x: 9
+                                      y: 10
+                                      width: 293
+                                      height: 30
+                                      text: "Rollo Schlafzimmer"
+                                      text_color: 0xFFFFFF
+                                      bg_opa: 0%
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                      border_opa: 0%
+                                      outline_opa: 0%
+                                  - line:
+                                      id: widget_1777134785519_38h32kfr6
+                                      x: 0
+                                      y: 0
+                                      width: 311
+                                      height: 90
+                                      points:
+                                        - 20, 50
+                                        - 290, 50
+                                      line_color: 0xFFFFFF
+                                  - switch:
+                                      id: widget_1777134785519_9tnlzmwfl
+                                      x: 185
+                                      y: 80
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0x4F46E5
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      outline_color:
+                                      indicator:
+                                        bg_color: 0x4F46E5
+                                      knob:
+                                        bg_color: 0xFFFFFF
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                                        radius: 4
+                                  - button:
+                                      id: lv_button_46
+                                      x: 50
+                                      y: 125
+                                      width: 65
+                                      height: 60
+                                      bg_color: 0x03003D
+                                      border_opa: 100%
+                                      radius: 20
+                                      text_color: 0xFFFFFF
+                                      text_opa: 100%
+                                      text_font: mdi_font
+                                      widgets:
+                                        - label:
+                                            text: "	\U0000F0731"
+                                            text_color: 0xFFFFFF
+                                  - button:
+                                      id: widget_1777135596014_puld28ykp
+                                      x: 123
+                                      y: 125
+                                      width: 65
+                                      height: 60
+                                      bg_color: 0x03003D
+                                      border_opa: 100%
+                                      radius: 20
+                                      text_color: 0xFFFFFF
+                                      text_opa: 100%
+                                      text_font: mdi_font
+                                      widgets:
+                                        - label:
+                                            text: "	\U0000F0731"
+                                            text_color: 0xFFFFFF
+                                  - button:
+                                      id: widget_1777135611555_gc2b2grzn
+                                      x: 195
+                                      y: 125
+                                      width: 65
+                                      height: 60
+                                      bg_color: 0x03003D
+                                      border_opa: 100%
+                                      radius: 20
+                                      text_color: 0xFFFFFF
+                                      text_opa: 100%
+                                      text_font: mdi_font
+                                      widgets:
+                                        - label:
+                                            text: "	\U0000F0731"
+                                            text_color: 0xFFFFFF
+                                  - slider:
+                                      id: lv_slider_48
+                                      x: 26
+                                      y: 200
+                                      width: 255
+                                      height: 20
+                                      value: 46
+                                      min_value: 0
+                                      max_value: 100
+                                      bg_color: 0x374151
+                                      radius: 9999
+                                      knob:
+                                        bg_color: 0xFFFFFF
+                                        border_color: 0x4F46E5
+                                        border_width: 2
+                                      indicator:
+                                        bg_color: 0x4F46E5
+                                        bg_opa: 100%
+                                        radius: 9999
+                        - name: Küche
+                        - name: Wohnen
+                        - name: Büro
+                        - name: Paula
+                        - name: Bad
+                        - name: WC
+              - name: Automation
+                widgets:
+                  - tabview:
+                      id: Automation
+                      x: 0
+                      y: 0
+                      width: 454
+                      height: 406
+                      position: LEFT
+                      bg_color: 0x011542
+                      border_color: 0x011542
+                      radius: 10
+                      scrollbar_mode: "OFF"
+                      tab_style:
+                        bg_color: 0x011542
+                        text_color: 0x868383
+                        items:
+                          checked:
+                            bg_color: 0x011542
+                            text_color: 0xFFFFFF
+                            border_color: 0xFFFFFF
+                          pressed:
+                            bg_color: 0x011542
+                            text_color: 0xFFFFFF
+                      tabs:
+                        - name: Trockner
+                          widgets:
+                            - obj:
+                                id: Bedienfeld_Trockner
+                                x: 35
+                                y: 45
+                                width: 313
+                                height: 260
+                                bg_color: 0x03003D
+                                border_width: 1
+                                border_color: 0x4B5563
+                                radius: 8
+                                shadow_width: 10
+                                pad_all: 0
+                                widgets:
+                                  - label:
+                                      id: widget_1777133846099_smijl6a69
+                                      x: 9
+                                      y: 210
+                                      width: 293
+                                      height: 40
+                                      text: "Zustand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      text_font: montserrat_24
+                                  - label:
+                                      id: widget_1777133822555_bvau9jihw
+                                      x: 60
+                                      y: 70
+                                      width: 125
+                                      height: 30
+                                      text: "Automatik"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - label:
+                                      id: widget_1777133970063_hmnmi6y84
+                                      x: 9
+                                      y: 10
+                                      width: 293
+                                      height: 30
+                                      text: "Raumlufttrockner"
+                                      text_color: 0xFFFFFF
+                                      bg_opa: 0%
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                      border_opa: 0%
+                                      outline_opa: 0%
+                                  - label:
+                                      id: widget_1777134472144_cjsvyhoan
+                                      x: 60
+                                      y: 140
+                                      width: 125
+                                      height: 30
+                                      text: "Hand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - line:
+                                      id: lv_line_45
+                                      x: 0
+                                      y: 0
+                                      width: 311
+                                      height: 90
+                                      points:
+                                        - 20, 50
+                                        - 290, 50
+                                      line_color: 0xFFFFFF
+                                  - switch:
+                                      id: widget_1777134462596_yw16sh31d
+                                      x: 185
+                                      y: 140
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                                  - switch:
+                                      id: widget_1777134451302_0idur6cw3
+                                      x: 185
+                                      y: 70
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                        - name: SolarThermie
+                          widgets:
+                            - obj:
+                                id: widget_1777134621870_kmi76d0tr
+                                x: 35
+                                y: 45
+                                width: 313
+                                height: 260
+                                bg_color: 0x03003D
+                                border_width: 1
+                                border_color: 0x4B5563
+                                radius: 8
+                                shadow_width: 10
+                                pad_all: 0
+                                widgets:
+                                  - label:
+                                      id: widget_1777134621870_ggq0kkd9g
+                                      x: 9
+                                      y: 210
+                                      width: 293
+                                      height: 40
+                                      text: "Zustand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      text_font: montserrat_24
+                                  - label:
+                                      id: widget_1777134621870_oorm01bw2
+                                      x: 60
+                                      y: 70
+                                      width: 125
+                                      height: 30
+                                      text: "Automatik"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - label:
+                                      id: widget_1777134621870_zncbz3cs4
+                                      x: 9
+                                      y: 10
+                                      width: 293
+                                      height: 30
+                                      text: "Solarthermie"
+                                      text_color: 0xFFFFFF
+                                      bg_opa: 0%
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                      border_opa: 0%
+                                      outline_opa: 0%
+                                  - label:
+                                      id: widget_1777134621870_mtort89mi
+                                      x: 60
+                                      y: 140
+                                      width: 125
+                                      height: 30
+                                      text: "Hand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - line:
+                                      id: widget_1777134621870_zgyozum31
+                                      x: 0
+                                      y: 0
+                                      width: 311
+                                      height: 90
+                                      points:
+                                        - 20, 50
+                                        - 290, 50
+                                      line_color: 0xFFFFFF
+                                  - switch:
+                                      id: widget_1777134621870_ag7co53xp
+                                      x: 185
+                                      y: 140
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                                  - switch:
+                                      id: widget_1777134621870_iyv4dwjwc
+                                      x: 185
+                                      y: 70
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                        - name: Pool
+                          widgets:
+                            - obj:
+                                id: widget_1777134676510_jzfsdmdvz
+                                x: 35
+                                y: 45
+                                width: 313
+                                height: 260
+                                bg_color: 0x03003D
+                                border_width: 1
+                                border_color: 0x4B5563
+                                radius: 8
+                                shadow_width: 10
+                                pad_all: 0
+                                widgets:
+                                  - label:
+                                      id: widget_1777134676510_w8jejjmpa
+                                      x: 9
+                                      y: 210
+                                      width: 293
+                                      height: 40
+                                      text: "Zustand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      text_font: montserrat_24
+                                  - label:
+                                      id: widget_1777134676510_qsdgpvmkn
+                                      x: 60
+                                      y: 70
+                                      width: 125
+                                      height: 30
+                                      text: "Automatik"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - label:
+                                      id: widget_1777134676510_lijijbvav
+                                      x: 9
+                                      y: 10
+                                      width: 293
+                                      height: 30
+                                      text: "Poolpumpe"
+                                      text_color: 0xFFFFFF
+                                      bg_opa: 0%
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                      border_opa: 0%
+                                      outline_opa: 0%
+                                  - label:
+                                      id: widget_1777134676510_8blyasnny
+                                      x: 60
+                                      y: 140
+                                      width: 125
+                                      height: 30
+                                      text: "Hand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - line:
+                                      id: widget_1777134676510_iv7uwc5kk
+                                      x: 0
+                                      y: 0
+                                      width: 311
+                                      height: 90
+                                      points:
+                                        - 20, 50
+                                        - 290, 50
+                                      line_color: 0xFFFFFF
+                                  - switch:
+                                      id: widget_1777134676510_wuvh8xvw1
+                                      x: 185
+                                      y: 140
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                                  - switch:
+                                      id: widget_1777134676510_wvsk6nas2
+                                      x: 185
+                                      y: 70
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                        - name: Weihnachtsbeleuchtung
+                          widgets:
+                            - obj:
+                                id: widget_1777134727678_0npak5jd5
+                                x: 35
+                                y: 45
+                                width: 313
+                                height: 260
+                                bg_color: 0x03003D
+                                border_width: 1
+                                border_color: 0x4B5563
+                                radius: 8
+                                shadow_width: 10
+                                pad_all: 0
+                                widgets:
+                                  - label:
+                                      id: widget_1777134727678_46mk0jjec
+                                      x: 9
+                                      y: 210
+                                      width: 293
+                                      height: 40
+                                      text: "Zustand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      text_font: montserrat_24
+                                  - label:
+                                      id: widget_1777134727678_abvl788n7
+                                      x: 60
+                                      y: 70
+                                      width: 125
+                                      height: 30
+                                      text: "Automatik"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - label:
+                                      id: widget_1777134727678_cergst6zy
+                                      x: 9
+                                      y: 10
+                                      width: 293
+                                      height: 30
+                                      text: "Weihnachtsbeleuchtung"
+                                      text_color: 0xFFFFFF
+                                      bg_opa: 0%
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                      border_opa: 0%
+                                      outline_opa: 0%
+                                  - label:
+                                      id: widget_1777134727678_nubj4nnzz
+                                      x: 60
+                                      y: 140
+                                      width: 125
+                                      height: 30
+                                      text: "Hand"
+                                      text_color: 0xFFFFFF
+                                      text_align: CENTER
+                                      long_mode: CLIP
+                                      text_font: montserrat_26
+                                  - line:
+                                      id: widget_1777134727678_8ohv65825
+                                      x: 0
+                                      y: 0
+                                      width: 311
+                                      height: 90
+                                      points:
+                                        - 20, 50
+                                        - 290, 50
+                                      line_color: 0xFFFFFF
+                                  - switch:
+                                      id: widget_1777134727678_8d4ywfrro
+                                      x: 185
+                                      y: 140
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+                                  - switch:
+                                      id: widget_1777134727678_2susdp3zu
+                                      x: 185
+                                      y: 70
+                                      width: 75
+                                      height: 30
+                                      state:
+                                        checked: true
+                                      bg_color: 0xE8E8E8
+                                      border_width: 0
+                                      border_color: 0xE8E8E8
+                                      border_opa: 100%
+                                      radius: 13
+                                      indicator:
+                                        bg_color: 0xE8E8E8
+                                      knob:
+                                        bg_color: 0x292929
+                                        border_color: 0x9CA3AF
+                                        border_width: 1
+              - name: WiFi
+                widgets:
+                  - obj:
+                      id: wsb_card
+                      x: 177
+                      y: 153
+                      width: 100
+                      height: 100
+                      bg_color: 0x070E1B
+                      bg_opa: 95%
+                      border_width: 1
+                      border_color: 0x162038
+                      border_opa: 20%
+                      radius: 16
+                      shadow_width: 16
+                      shadow_color: 0x10B981
+                      shadow_opa: 35%
+                      scrollbar_mode: "OFF"
+                      pad_all: 0
+                      widgets:
+                        - label:
+                            id: wsb_icon
+                            x: 10
+                            y: 17
+                            width: 80
+                            height: 26
+                            text: "\uF1EB"
+                            text_font: montserrat_22
+                            text_align: CENTER
+                            text_color: 0x10B981
+                        - label:
+                            id: wsb_text
+                            x: 10
+                            y: 54
+                            width: 80
+                            height: 20
+                            text: "Online"
+                            text_color: 0x10B981
+                            text_align: CENTER
+                            long_mode: CLIP
+                            text_font: montserrat_16
+                        - label:
+                            id: wsb_label
+                            x: 10
+                            y: 77
+                            width: 80
+                            height: 14
+                            text: "WiFi"
+                            text_color: 0x8E9FB8
+                            text_align: CENTER
+                            long_mode: CLIP
+                            text_font: montserrat_10
+interval:
+  - interval: 40ms # Schnelle Taktrate für flüssige Bewegung
+    then:
+      - lambda: |-
+          // --- LOGIK FÜR PV LAUFLICHT ---
+          float power = id(pv_power).state; // Watt
+          static float pv_pos = 0;
+          
+          if (power > 50) { // Nur bewegen wenn mehr als 50W erzeugt werden
+            // Geschwindigkeit: Bei 5000W ca. 4 Pixel pro Schritt
+            float speed = power / 1200.0f; 
+            if (speed > 8) speed = 8; // Begrenzung
+            
+            pv_pos += speed;
+            if (pv_pos > 110) pv_pos = -8; // 110 ist die Breite deiner pv_line
+            
+            id(pv_dot).set_x((int16_t)pv_pos);
+            id(pv_dot).set_style_bg_opa(255, 0); // Sichtbar machen
+          } else {
+            id(pv_dot).set_style_bg_opa(0, 0);   // Ausblenden wenn keine Sonne
+          }
