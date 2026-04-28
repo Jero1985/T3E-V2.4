@@ -152,28 +152,26 @@ display:
     pclk_pin: GPIO41
 
 # --- SCHRIFTEN ---
-# --- SCHRIFTEN (VOLLSTÄNDIG GEREINIGT) ---
 font:
   - file: "materialdesignicons-webfont.ttf"
     id: mdi_icons_18
     size: 18
     glyphs: 
-      - "\U000F050F" # Thermometer
-      - "\U000F0510" # Wassertropfen
-
+      - "\U000F050F"
+      - "\U000F0510"
   - file: "materialdesignicons-webfont.ttf"
     id: mdi_icons_24
     size: 24
     glyphs:
-      - "\U000F05F1" # EV Station
-      - "\U000F0CB8" # Playlist
-      - "\U000F0A72" # Solar Power
-      - "\U000F02DC" # Haus (Korrigiert)
-      - "\U000F0731" # Rollo
-
+      - "\U000F05F1"
+      - "\U000F0CB8"
+      - "\U000F0A72"
+      - "\U000F02DC" # Das ist das Haus-Icon
+      - "\U000F0731" # Das ist das Rollo-Icon
   - file: "gfonts://Montserrat"
     id: montserrat_8
     size: 8
+  # ... (deine anderen Montserrat Fonts hier einfach so lassen)
   - file: "gfonts://Montserrat"
     id: montserrat_10
     size: 10
@@ -459,7 +457,7 @@ lvgl:
                                   y: 11
                                   width: 48
                                   height: 48
-                                  text: "\U0000F015"
+                                  text: "\U000F02DC"
                                   text_font: mdi_icons_24
                                   text_align: CENTER
                                   text_color: 0xFFFFFF
@@ -761,8 +759,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - [20, 50]
-                                        - [290, 50]
+                                        - 20, 50
+                                        - 290, 50
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134785519_9tnlzmwfl
@@ -951,8 +949,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - [20, 50]
-                                        - [290, 50]
+                                        - 20, 50
+                                        - 290, 50
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134462596_yw16sh31d
@@ -1059,8 +1057,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - [20, 50]
-                                        - [290, 50]
+                                        - 20, 50
+                                        - 290, 50
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134621870_ag7co53xp
@@ -1167,8 +1165,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - [20, 50]
-                                        - [290, 50]
+                                        - 20, 50
+                                        - 290, 50
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134676510_wuvh8xvw1
@@ -1275,8 +1273,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - [20, 50]
-                                        - [290, 50]
+                                        - 20, 50
+                                        - 290, 50
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134727678_8d4ywfrro
