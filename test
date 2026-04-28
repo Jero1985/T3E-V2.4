@@ -856,11 +856,11 @@ lvgl:
                         - name: Bad
                         - name: WC
               
-              # ---- TAB: AUTOMATION ----
-              - name: Automation
+              # ---- TAB: AUTO ----
+              - name: Auto
                 widgets:
                   - tabview:
-                      id: Automation
+                      id: Auto
                       x: 0
                       y: 0
                       width: 454
