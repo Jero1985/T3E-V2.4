@@ -1,26 +1,208 @@
-# External icon fonts - auto-generated for icons used in this design
-# ESPHome downloads fonts automatically on first compile
+esphome:
+  name: display-flur
+  on_boot:
+    priority: 600
+    then:
+      - delay: 1s
+      - light.turn_on: display_backlight
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  cpu_frequency: 240MHz
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG: "y" 
+      CONFIG_SPIRAM_RODATA: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: INFO
+  hardware_uart: UART0 
+
+wifi:
+  ssid: "WLAN-2,4-GHz"
+  password: "1november08paula"
+  use_address: 192.168.2.194
+  manual_ip:
+    static_ip: 192.168.2.194
+    gateway: 192.168.2.1
+    subnet: 255.255.255.0
+
+api:
+  reboot_timeout: 0s
+  encryption: {key: "Njg2NGE1NmE4YmI0NmJlYzhjNjkyM2MwNWRiZDM3Y2Y="}
+
+ota:
+  - platform: esphome
+
+globals:
+  - id: pv_pos_var
+    type: float
+    initial_value: '0'
+  - id: pv_visible_var
+    type: bool
+    initial_value: 'false'
+  - id: wb_pos_var
+    type: float
+    initial_value: '0'
+  - id: wb_visible_var
+    type: bool
+    initial_value: 'false'
+
+# --- HOME ASSISTANT ENTITÄTEN ---
+sensor:
+  - platform: homeassistant
+    id: pv_power_aktuell
+    entity_id: sensor.pv_leistung_positiv
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: pv_aktuell
+            text: !lambda 'return str_sprintf("%.1f kW", x);'
+  
+  - platform: homeassistant
+    id: wallbox_power
+    entity_id: sensor.cupra_born_charging_power
+    on_value:
+      then:
+        - lvgl.arc.update:
+            id: lv_arc_61
+            value: !lambda "return (int)((x / 11000.0) * 100.0);"
+        - lvgl.label.update:
+            id: wallbox_aktuell
+            text: !lambda 'return str_sprintf("%.1f kW", x/1000.0);'
+
+binary_sensor:
+  - platform: homeassistant
+    id: auto_rollo
+    entity_id: input_boolean.sonnenschutz_automatik
+  - platform: homeassistant
+    id: auto_weihnacht
+    entity_id: input_boolean.weihnachtsbeleuchtung_automatik
+  - platform: homeassistant
+    id: status_weihnacht
+    entity_id: switch.4_fach_relais_hauptverteilung_l1
+  - platform: homeassistant
+    id: status_trockner
+    entity_id: switch.4_fach_relais_hauptverteilung_l4
+  - platform: homeassistant
+    id: auto_trockner
+    entity_id: input_boolean.lufttrockner_automatik
+
+# --- HARDWARE ---
+i2c:
+  - id: bus_a
+    sda: GPIO07
+    scl: GPIO06
+    scan: true
+
+touchscreen:
+  - platform: gt911
+    id: my_touch
+    display: tft_display
+    i2c_id: bus_a
+    address: 0x5D
+    reset_pin: GPIO5
+
+output:
+  - platform: ledc
+    id: backlight_output
+    pin: GPIO42
+    frequency: 1000Hz
+
+light:
+  - platform: monochromatic
+    id: display_backlight
+    output: backlight_output
+    restore_mode: ALWAYS_ON
+
+spi:
+  id: lcd_spi
+  clk_pin: {number: GPIO15, allow_other_uses: true}
+  mosi_pin: {number: GPIO48, allow_other_uses: true}
+
+display:
+  - platform: st7701s
+    id: tft_display
+    spi_id: lcd_spi
+    dimensions: {width: 480, height: 480}
+    color_order: RGB
+    invert_colors: true
+    auto_clear_enabled: false
+    spi_mode: MODE3
+    data_rate: 20MHz
+    cs_pin: {number: GPIO4, allow_other_uses: true}
+    reset_pin: {number: GPIO4, allow_other_uses: true}
+    init_sequence:
+      - 1
+    data_pins:
+      red: [GPIO8, GPIO18, GPIO17, GPIO16, GPIO0]
+      green: [GPIO13, GPIO12, GPIO11, GPIO10, GPIO9, GPIO3]
+      blue: [{number: GPIO15, allow_other_uses: true}, {number: GPIO48, allow_other_uses: true}, GPIO47, GPIO21, GPIO14]
+    de_pin: GPIO40
+    vsync_pin: GPIO39
+    hsync_pin: GPIO38
+    pclk_pin: GPIO41
+
+# --- SCHRIFTEN ---
+# --- SCHRIFTEN (VOLLSTÄNDIG GEREINIGT) ---
 font:
-  - file:
-      url: "https://cdn.jsdelivr.net/npm/@mdi/font@latest/fonts/materialdesignicons-webfont.ttf"
-      type: web
+  - file: "materialdesignicons-webfont.ttf"
     id: mdi_icons_18
     size: 18
-    glyphs: [
-      "\U000F050F",  # Thermometer
-    ]
-  - file:
-      url: "https://cdn.jsdelivr.net/npm/@mdi/font@latest/fonts/materialdesignicons-webfont.ttf"
-      type: web
+    glyphs: 
+      - "\U000F050F" # Thermometer
+      - "\U000F0510" # Wassertropfen
+
+  - file: "materialdesignicons-webfont.ttf"
     id: mdi_icons_24
     size: 24
-    glyphs: [
-      "\U000F05F1",  # EV Station
-      "\U000F0CB8",  # Playlist
-      "\U000F0A72",  # Solar Power
-    ]
+    glyphs:
+      - "\U000F05F1" # EV Station
+      - "\U000F0CB8" # Playlist
+      - "\U000F0A72" # Solar Power
+      - "\U000F02DC" # Haus (Korrigiert)
+      - "\U000F0731" # Rollo
 
+  - file: "gfonts://Montserrat"
+    id: montserrat_8
+    size: 8
+  - file: "gfonts://Montserrat"
+    id: montserrat_10
+    size: 10
+  - file: "gfonts://Montserrat"
+    id: montserrat_16
+    size: 16
+  - file: "gfonts://Montserrat"
+    id: montserrat_22
+    size: 22
+  - file: "gfonts://Montserrat"
+    id: montserrat_24
+    size: 24
+  - file: "gfonts://Montserrat"
+    id: montserrat_25
+    size: 25
+  - file: "gfonts://Montserrat"
+    id: montserrat_26
+    size: 26
+  - file: "gfonts://Montserrat"
+    id: montserrat_58
+    size: 58
+
+# --- LVGL DESIGN ---
 lvgl:
+  id: my_lvgl
+  buffer_size: 20%
+  touchscreens:
+    - touchscreen_id: my_touch
+
   pages:
     - id: canvas_1
       bg_color: 0x3D64B8
@@ -40,7 +222,6 @@ lvgl:
             border_color: 0x032163
             border_opa: 100%
             radius: 0
-            outline_color: 
             scrollbar_mode: "OFF"
             tab_style:
               bg_color: 0x032163
@@ -55,6 +236,7 @@ lvgl:
                   bg_color: 0x032163
                   text_color: 0xFFFFFF
             tabs:
+              # ---- TAB: HOME ----
               - name: Home
                 widgets:
                   - obj:
@@ -68,7 +250,6 @@ lvgl:
                       border_color: 0x4B5563
                       radius: 8
                       shadow_width: 10
-                      shadow_color: 0xFFF700
                       pad_all: 0
                       widgets:
                         - label:
@@ -94,7 +275,7 @@ lvgl:
                             long_mode: CLIP
                             text_font: montserrat_25
                   - obj:
-                      id: widget_1777138409066_hquj3pny2
+                      id: climate_box
                       x: 232
                       y: 9
                       width: 207
@@ -104,7 +285,6 @@ lvgl:
                       border_color: 0x4B5563
                       radius: 8
                       shadow_width: 10
-                      shadow_color: 0x00BFFF
                       pad_all: 0
                       widgets:
                         - label:
@@ -113,8 +293,8 @@ lvgl:
                             y: 10
                             width: 48
                             height: 48
-                            text: "\uF043"
-                            text_font: montserrat_18
+                            text: "\U000F0510" 
+                            text_font: mdi_icons_24
                             text_align: CENTER
                             text_color: 0x06B6D4
                         - label:
@@ -150,7 +330,6 @@ lvgl:
                       border_color: 0x4B5563
                       radius: 8
                       shadow_width: 10
-                      shadow_color: 0x62FF00
                       opa: 80%
                       pad_all: 0
                       widgets:
@@ -190,7 +369,7 @@ lvgl:
                             pad_all: 0
                             widgets:
                               - obj:
-                                  id: widget_1777140880066_a4wm6zco7
+                                  id: wb_dot 
                                   x: 0
                                   y: 0
                                   width: 8
@@ -280,8 +459,8 @@ lvgl:
                                   y: 11
                                   width: 48
                                   height: 48
-                                  text: "\uF015"
-                                  text_font: montserrat_24
+                                  text: "\U0000F015"
+                                  text_font: mdi_icons_24
                                   text_align: CENTER
                                   text_color: 0xFFFFFF
                               - arc:
@@ -459,7 +638,6 @@ lvgl:
                       border_color: 0x4B5563
                       radius: 8
                       shadow_width: 10
-                      shadow_color: 0xFF6A00
                       pad_all: 0
                       widgets:
                         - label:
@@ -494,6 +672,8 @@ lvgl:
                             text_align: RIGHT
                             long_mode: CLIP
                             text_font: montserrat_8
+              
+              # ---- TAB: ROLLO ----
               - name: Rollo
                 widgets:
                   - tabview:
@@ -509,9 +689,6 @@ lvgl:
                       border_color: 0x011542
                       border_opa: 100%
                       radius: 10
-                      shadow_width: 0
-                      shadow_color: 
-                      shadow_opa: 100%
                       scrollbar_mode: "OFF"
                       tab_style:
                         bg_color: 0x011542
@@ -577,7 +754,6 @@ lvgl:
                                       long_mode: CLIP
                                       text_font: montserrat_26
                                       border_opa: 0%
-                                      outline_opa: 0%
                                   - line:
                                       id: widget_1777134785519_38h32kfr6
                                       x: 0
@@ -585,8 +761,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - 20, 50
-                                        - 290, 50
+                                        - [20, 50]
+                                        - [290, 50]
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134785519_9tnlzmwfl
@@ -601,7 +777,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0x4F46E5
                                       knob:
@@ -623,7 +798,7 @@ lvgl:
                                       text_font: mdi_icons_24
                                       widgets:
                                         - label:
-                                            text: "	\U0000F0731"
+                                            text: "\U000F0731" # <-- HIER KORRIGIERT AUF 8 ZEICHEN
                                             text_color: 0xFFFFFF
                                   - button:
                                       id: widget_1777135596014_puld28ykp
@@ -639,7 +814,7 @@ lvgl:
                                       text_font: mdi_icons_24
                                       widgets:
                                         - label:
-                                            text: "	\U0000F0731"
+                                            text: "\U000F0731" # <-- HIER KORRIGIERT AUF 8 ZEICHEN
                                             text_color: 0xFFFFFF
                                   - button:
                                       id: widget_1777135611555_gc2b2grzn
@@ -655,7 +830,7 @@ lvgl:
                                       text_font: mdi_icons_24
                                       widgets:
                                         - label:
-                                            text: "	\U0000F0731"
+                                            text: "\U000F0731" # <-- HIER KORRIGIERT AUF 8 ZEICHEN
                                             text_color: 0xFFFFFF
                                   - slider:
                                       id: lv_slider_48
@@ -682,6 +857,8 @@ lvgl:
                         - name: Paula
                         - name: Bad
                         - name: WC
+              
+              # ---- TAB: AUTOMATION ----
               - name: Automation
                 widgets:
                   - tabview:
@@ -694,7 +871,6 @@ lvgl:
                       bg_color: 0x011542
                       border_color: 0x011542
                       radius: 10
-                      outline_color: 
                       scrollbar_mode: "OFF"
                       tab_style:
                         bg_color: 0x011542
@@ -757,7 +933,6 @@ lvgl:
                                       long_mode: CLIP
                                       text_font: montserrat_26
                                       border_opa: 0%
-                                      outline_opa: 0%
                                   - label:
                                       id: widget_1777134472144_cjsvyhoan
                                       x: 60
@@ -776,8 +951,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - 20, 50
-                                        - 290, 50
+                                        - [20, 50]
+                                        - [290, 50]
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134462596_yw16sh31d
@@ -792,7 +967,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -812,7 +986,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -868,7 +1041,6 @@ lvgl:
                                       long_mode: CLIP
                                       text_font: montserrat_26
                                       border_opa: 0%
-                                      outline_opa: 0%
                                   - label:
                                       id: widget_1777134621870_mtort89mi
                                       x: 60
@@ -887,8 +1059,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - 20, 50
-                                        - 290, 50
+                                        - [20, 50]
+                                        - [290, 50]
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134621870_ag7co53xp
@@ -903,7 +1075,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -923,7 +1094,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -979,7 +1149,6 @@ lvgl:
                                       long_mode: CLIP
                                       text_font: montserrat_26
                                       border_opa: 0%
-                                      outline_opa: 0%
                                   - label:
                                       id: widget_1777134676510_8blyasnny
                                       x: 60
@@ -998,8 +1167,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - 20, 50
-                                        - 290, 50
+                                        - [20, 50]
+                                        - [290, 50]
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134676510_wuvh8xvw1
@@ -1014,7 +1183,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -1034,7 +1202,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -1090,7 +1257,6 @@ lvgl:
                                       long_mode: CLIP
                                       text_font: montserrat_26
                                       border_opa: 0%
-                                      outline_opa: 0%
                                   - label:
                                       id: widget_1777134727678_nubj4nnzz
                                       x: 60
@@ -1109,8 +1275,8 @@ lvgl:
                                       width: 311
                                       height: 90
                                       points:
-                                        - 20, 50
-                                        - 290, 50
+                                        - [20, 50]
+                                        - [290, 50]
                                       line_color: 0xFFFFFF
                                   - switch:
                                       id: widget_1777134727678_8d4ywfrro
@@ -1125,7 +1291,6 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
@@ -1145,13 +1310,14 @@ lvgl:
                                       border_color: 0xE8E8E8
                                       border_opa: 100%
                                       radius: 13
-                                      outline_color:
                                       indicator:
                                         bg_color: 0xE8E8E8
                                       knob:
                                         bg_color: 0x292929
                                         border_color: 0x9CA3AF
                                         border_width: 1
+              
+              # ---- TAB: WIFI ----
               - name: WiFi
                 widgets:
                   - obj:
@@ -1178,7 +1344,7 @@ lvgl:
                             y: 17
                             width: 80
                             height: 26
-                            text: "\uF1EB"
+                            text: "\U0000F1EB"
                             text_font: montserrat_22
                             text_align: CENTER
                             text_color: 0x10B981
@@ -1204,3 +1370,59 @@ lvgl:
                             text_align: CENTER
                             long_mode: CLIP
                             text_font: montserrat_10
+
+# --- ZEIT-SYNCHRONISIERUNG & ANIMATION ---
+time:
+  - platform: homeassistant
+    id: esptime
+    on_time:
+      - seconds: 0
+        then:
+          - lvgl.label.update:
+              id: clk_time
+              text: !lambda 'return id(esptime).now().strftime("%H:%M");'
+          - lvgl.label.update:
+              id: clk_date
+              text: !lambda 'return id(esptime).now().strftime("%a %d %b");'
+
+interval:
+  - interval: 40ms
+    then:
+      - lambda: |-
+          float w_pv = id(pv_power_aktuell).state;
+          static float pv_pos = 0;
+          if (w_pv > 20) {
+            pv_pos += (w_pv / 1000.0f);
+            if (pv_pos > 110) pv_pos = -8; 
+            id(pv_pos_var) = pv_pos;
+            id(pv_visible_var) = true;
+          } else { id(pv_visible_var) = false; }
+
+          float w_wb = id(wallbox_power).state;
+          static float wb_pos = 0;
+          if (w_wb > 50) {
+            wb_pos += (w_wb / 2000.0f);
+            if (wb_pos > 110) wb_pos = -8;
+            id(wb_pos_var) = wb_pos;
+            id(wb_visible_var) = true;
+          } else { id(wb_visible_var) = false; }
+
+      - if:
+          condition: { lambda: 'return id(pv_visible_var);' }
+          then:
+            - lvgl.widget.update:
+                id: pv_dot
+                x: !lambda 'return (int16_t)id(pv_pos_var);'
+                y: 0
+          else:
+            - lvgl.widget.update: { id: pv_dot, x: -50, y: -50 } 
+
+      - if:
+          condition: { lambda: 'return id(wb_visible_var);' }
+          then:
+            - lvgl.widget.update:
+                id: wb_dot
+                x: !lambda 'return (int16_t)id(wb_pos_var);'
+                y: 0
+          else:
+            - lvgl.widget.update: { id: wb_dot, x: -50, y: -50 }
