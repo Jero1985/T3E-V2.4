@@ -4,8 +4,7 @@ esphome:
     priority: 600
     then:
       - delay: 1s
-      - light.turn_on: display_backlight
-      - lambda: 'id(tft_display).update();'
+      - output.turn_on: backlight_output
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -15,9 +14,6 @@ esp32:
   framework:
     type: esp-idf
     sdkconfig_options:
-      CONFIG_ESP_CONSOLE_UART_NONE: "y"
-      CONFIG_USB_OTG_ENABLED: "n"
-      CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG: "n"
       CONFIG_SPIRAM_RODATA: "y"
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: "y"
 
@@ -25,23 +21,17 @@ psram:
   mode: octal
   speed: 80MHz
 
-text_sensor:
-  - platform: tuya_zigbee_router
-    zigbee_status:
-      name: "Zigbee Router Status"
-      id: zigbee_status_sensor
-
-external_components:
-  - source: github://rtorrente/esphome-tuya-zigbee-router
-
 logger:
   level: INFO
-  hardware_uart: UART0
   baud_rate: 0
 
 wifi:
-  ssid: "!secret wifi_ssid"
-  password: "!secret wifi_password"
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: !secret static_ip
+    gateway: !secret gateway_ip
+    subnet: !secret subnet_mask
 
 api:
   reboot_timeout: 0s
@@ -51,53 +41,23 @@ api:
 ota:
   - platform: esphome
 
-font:
-  - file: "gfonts://Roboto"
-    id: my_font
-    size: 20
-
-image:
-  - file: "test.png"
-    id: test_bild
-    type: RGB
+# =========================
+# BUSSE
+# =========================
 
 i2c:
   - id: bus_a
-    sda: GPIO7
-    scl: GPIO6
-    scan: true
-    frequency: 100kHz
-
-touchscreen:
-  - platform: gt911
-    id: my_touch
-    display: tft_display
-    i2c_id: bus_a
-    # Wir lassen die Adresse weg -> Auto-Scan 0x14/0x5D
-    calibration:
-      x_min: 0
-      x_max: 480
-      y_min: 0
-      y_max: 480
-    on_touch:
-      - logger.log:
-          format: "Touch erkannt bei X=%.1f Y=%.1f"
-          args: [touch.x, touch.y]
+    sda: GPIO07
+    scl: GPIO06
 
 spi:
   id: lcd_spi
   clk_pin: {number: GPIO15, allow_other_uses: true}
   mosi_pin: {number: GPIO48, allow_other_uses: true}
 
-uart:
-  id: uart_zigbee
-  tx_pin: GPIO20
-  rx_pin: GPIO19
-  baud_rate: 115200
-
-tuya_zigbee_router:
-  uart_id: uart_zigbee
-  id: zigbee_router_id
+# =========================
+# BACKLIGHT
+# =========================
 
 output:
   - platform: ledc
@@ -105,49 +65,241 @@ output:
     pin: GPIO42
     frequency: 1000Hz
 
-light:
-  - platform: monochromatic
-    id: display_backlight
-    output: backlight_output
-    restore_mode: ALWAYS_ON
+# =========================
+# TOUCH
+# =========================
 
-button:
-  - platform: template
-    name: "Zigbee Module Restart"
-    on_press:
-      - tuya_zigbee_router.reset:
-          id: zigbee_router_id
+touchscreen:
+  - platform: gt911
+    id: panel_touch
+    display: tft_display
+    i2c_id: bus_a
+    address: 0x5D
+
+    on_touch:
+      - lambda: |-
+          ESP_LOGD("touch", "touch detected");
+          id(page) = (id(page) + 1) % 2;
+          id(tft_display).update();
+
+# =========================
+# GLOBALS
+# =========================
+
+globals:
+  - id: page
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: last_button
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+# =========================
+# RELAIS (DEIN ORIGINAL)
+# =========================
+
+switch:
+  - platform: gpio
+    pin:
+      number: GPIO45
+      ignore_strapping_warning: true
+    id: relay_1
+    name: "Flur Relais 1"
+
+# =========================
+# BILD (WICHTIG: PNG!)
+# =========================
+
+image:
+  - file: "images/bunt.png"
+    id: mein_hintergrund
+    type: RGB
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_big
+    size: 32
+
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 20
+
+# =========================
+# DISPLAY (DEIN STABILER SETUP)
+# =========================
 
 display:
   - platform: st7701s
     id: tft_display
+    spi_id: lcd_spi
+
     dimensions: {width: 480, height: 480}
+
     color_order: RGB
     invert_colors: true
+
     auto_clear_enabled: false
     update_interval: never
+
     spi_mode: MODE3
-    data_rate: 2MHz
+    data_rate: 8MHz
+
     cs_pin: {number: GPIO4, allow_other_uses: true}
     reset_pin: {number: GPIO4, allow_other_uses: true}
+
     init_sequence:
       - 1
+
+    # STABILES TIMING
+    pclk_frequency: 12MHz
+    pclk_inverted: false
+
+    hsync_pulse_width: 8
+    hsync_back_porch: 10
+    hsync_front_porch: 50
+
+    vsync_pulse_width: 8
+    vsync_back_porch: 10
+    vsync_front_porch: 20
+
     data_pins:
       red: [GPIO8, GPIO18, GPIO17, GPIO16, GPIO0]
       green: [GPIO13, GPIO12, GPIO11, GPIO10, GPIO9, GPIO3]
-      blue: [{number: GPIO15, allow_other_uses: true}, {number: GPIO48, allow_other_uses: true}, GPIO47, GPIO21, GPIO14]
+      blue:
+        - {number: GPIO15, allow_other_uses: true}
+        - {number: GPIO48, allow_other_uses: true}
+        - GPIO47
+        - GPIO21
+        - GPIO14
+
     de_pin: GPIO40
     vsync_pin: GPIO39
     hsync_pin: GPIO38
-    pclk_pin:  GPIO41
-    pclk_inverted: false
-    pclk_frequency: 12MHz
-    hsync_pulse_width: 8
-    hsync_front_porch: 10
-    hsync_back_porch: 50
-    vsync_pulse_width: 8
-    vsync_front_porch: 10
-    vsync_back_porch: 20
-    lambda: |-
-      it.image(0, 0, id(test_bild));
-      it.print(240, 440, id(my_font), TextAlign::CENTER, "Polling-Touch Aktiv");
+    pclk_pin: GPIO41
+
+lvgl:
+  id: my_lvgl
+  buffer_size: 25%
+  color_depth: 16
+
+  # 🔥 WICHTIG: verhindert Scrollverhalten
+  scrollable: false
+
+  pages:
+    - id: main_page
+
+      widgets:
+
+        # =========================
+        # HINTERGRUND (fix, kein Scroll)
+        # =========================
+        - image:
+            src: mein_hintergrund
+            x: 0
+            y: 0
+            width: 480
+            height: 480
+
+        # =========================
+        # BUTTON 1
+        # =========================
+        - button:
+            x: 20
+            y: 20
+            width: 200
+            height: 150
+            bg_color: 0x4444FF
+            on_press:
+              - lambda: |-
+                  id(last_button) = 1;
+              - script.execute: update_status
+            widgets:
+              - label:
+                  text: "BTN 1"
+                  align: CENTER
+
+        # =========================
+        # BUTTON 2
+        # =========================
+        - button:
+            x: 260
+            y: 20
+            width: 200
+            height: 150
+            bg_color: 0x44FF44
+            on_press:
+              - lambda: |-
+                  id(last_button) = 2;
+              - script.execute: update_status
+            widgets:
+              - label:
+                  text: "BTN 2"
+                  align: CENTER
+
+        # =========================
+        # BUTTON 3
+        # =========================
+        - button:
+            x: 20
+            y: 200
+            width: 200
+            height: 150
+            bg_color: 0xFF4444
+            on_press:
+              - lambda: |-
+                  id(last_button) = 3;
+              - script.execute: update_status
+            widgets:
+              - label:
+                  text: "BTN 3"
+                  align: CENTER
+
+        # =========================
+        # BUTTON 4
+        # =========================
+        - button:
+            x: 260
+            y: 200
+            width: 200
+            height: 150
+            bg_color: 0xFFFF44
+
+            on_press:
+              - lambda: |-
+                  id(last_button) = 4;
+              - script.execute: update_status
+
+            widgets:
+              - label:
+                  text: "BTN 4"
+                  align: CENTER
+
+        # =========================
+        # STATUS ANZEIGE (immer sichtbar)
+        # =========================
+        - label:
+            id: status_label
+            x: 0
+            y: 0
+            width: 480
+            height: 100
+            align: CENTER
+            text: "Touch Test"
+            text_align: CENTER
+            bg_color: 0x000000
+            text_color: 0xFFFFFF
+
+script:
+  - id: update_status
+    then:
+      - lvgl.label.update:
+          id: status_label
+          text: !lambda |-
+            if (id(last_button) == 1) return std::string("Button 1 gedrückt");
+            if (id(last_button) == 2) return std::string("Button 2 gedrückt");
+            if (id(last_button) == 3) return std::string("Button 3 gedrückt");
+            if (id(last_button) == 4) return std::string("Button 4 gedrückt");
+            return std::string("Touch Test");
+      - component.update: tft_display
